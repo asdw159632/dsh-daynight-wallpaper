@@ -1,0 +1,5 @@
+# 源动图（用户提供的原始 GIF）：只用于本地重建素材，不随仓库分发
+mountain.gif
+Tokyo-better.gif
+# 发布用的临时检出
+tmp/

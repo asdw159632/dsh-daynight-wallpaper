@@ -1,0 +1,29 @@
+{
+  "schema": "daynight-peak/schedule/1",
+  "id": "mountain",
+  "scene": "Mountain",
+  "width": 1600,
+  "height": 1103,
+  "source": { "file": "mountain.gif", "frames": 73, "anchors": "tools/scenes/mountain.anchors" },
+  "note": "at = 本地时刻的分钟数；相邻两个 at 之间由前端按当前时钟连续叠化，最后一点之后回绕到第一点。dim = 该帧的遮罩浓度（0–1），随画面亮度反相关。",
+  "points": [
+    { "at": 0, "src": "frames/016.webp", "dim": 0.02, "label": "深夜", "labelEn": "Deep night" },
+    { "at": 270, "src": "frames/033.webp", "dim": 0.02, "label": "黎明前", "labelEn": "Before dawn" },
+    { "at": 300, "src": "frames/035.webp", "dim": 0.04, "label": "破晓", "labelEn": "Daybreak" },
+    { "at": 325, "src": "frames/037.webp", "dim": 0.11, "label": "霞光", "labelEn": "First light" },
+    { "at": 350, "src": "frames/039.webp", "dim": 0.20, "label": "天色转蓝", "labelEn": "Blueing sky" },
+    { "at": 375, "src": "frames/041.webp", "dim": 0.25, "label": "日出", "labelEn": "Sunrise" },
+    { "at": 400, "src": "frames/043.webp", "dim": 0.28, "label": "清晨", "labelEn": "Early morning" },
+    { "at": 425, "src": "frames/045.webp", "dim": 0.31, "label": "早上", "labelEn": "Morning" },
+    { "at": 450, "src": "frames/047.webp", "dim": 0.31, "label": "白昼", "labelEn": "Daylight" },
+    { "at": 570, "src": "frames/050.webp", "dim": 0.32, "label": "上午", "labelEn": "Late morning" },
+    { "at": 720, "src": "frames/054.webp", "dim": 0.32, "label": "正午", "labelEn": "Noon" },
+    { "at": 900, "src": "frames/060.webp", "dim": 0.32, "label": "午后", "labelEn": "Afternoon" },
+    { "at": 1020, "src": "frames/064.webp", "dim": 0.32, "label": "傍晚", "labelEn": "Late afternoon" },
+    { "at": 1050, "src": "frames/066.webp", "dim": 0.26, "label": "夕照", "labelEn": "Golden hour" },
+    { "at": 1080, "src": "frames/068.webp", "dim": 0.18, "label": "落日", "labelEn": "Sunset" },
+    { "at": 1110, "src": "frames/070.webp", "dim": 0.11, "label": "暮蓝", "labelEn": "Blue hour" },
+    { "at": 1140, "src": "frames/072.webp", "dim": 0.06, "label": "入夜", "labelEn": "Nightfall" },
+    { "at": 1260, "src": "frames/016.webp", "dim": 0.02, "label": "深夜", "labelEn": "Deep night" }
+  ]
+}

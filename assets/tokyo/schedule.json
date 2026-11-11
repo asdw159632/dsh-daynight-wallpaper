@@ -1,0 +1,28 @@
+{
+  "schema": "daynight-peak/schedule/1",
+  "id": "tokyo",
+  "scene": "Tokyo",
+  "width": 1600,
+  "height": 980,
+  "source": { "file": "Tokyo-better.gif", "frames": 200, "anchors": "tools/scenes/tokyo.anchors" },
+  "note": "at = 本地时刻的分钟数；相邻两个 at 之间由前端按当前时钟连续叠化，最后一点之后回绕到第一点。dim = 该帧的遮罩浓度（0–1），随画面亮度反相关。",
+  "points": [
+    { "at": 0, "src": "frames/005.webp", "dim": 0.02, "label": "深夜", "labelEn": "Deep night" },
+    { "at": 270, "src": "frames/018.webp", "dim": 0.07, "label": "黎明前", "labelEn": "Before dawn" },
+    { "at": 300, "src": "frames/028.webp", "dim": 0.09, "label": "破晓", "labelEn": "Daybreak" },
+    { "at": 330, "src": "frames/045.webp", "dim": 0.10, "label": "霞光", "labelEn": "First light" },
+    { "at": 360, "src": "frames/060.webp", "dim": 0.14, "label": "日出", "labelEn": "Sunrise" },
+    { "at": 390, "src": "frames/072.webp", "dim": 0.14, "label": "清晨", "labelEn": "Early morning" },
+    { "at": 420, "src": "frames/080.webp", "dim": 0.28, "label": "早上", "labelEn": "Morning" },
+    { "at": 450, "src": "frames/095.webp", "dim": 0.32, "label": "白昼", "labelEn": "Daylight" },
+    { "at": 600, "src": "frames/110.webp", "dim": 0.32, "label": "上午", "labelEn": "Late morning" },
+    { "at": 720, "src": "frames/125.webp", "dim": 0.32, "label": "正午", "labelEn": "Noon" },
+    { "at": 900, "src": "frames/145.webp", "dim": 0.32, "label": "午后", "labelEn": "Afternoon" },
+    { "at": 1020, "src": "frames/160.webp", "dim": 0.32, "label": "傍晚", "labelEn": "Late afternoon" },
+    { "at": 1050, "src": "frames/168.webp", "dim": 0.20, "label": "夕照", "labelEn": "Golden hour" },
+    { "at": 1080, "src": "frames/180.webp", "dim": 0.14, "label": "落日", "labelEn": "Sunset" },
+    { "at": 1110, "src": "frames/190.webp", "dim": 0.11, "label": "暮蓝", "labelEn": "Blue hour" },
+    { "at": 1140, "src": "frames/199.webp", "dim": 0.03, "label": "入夜", "labelEn": "Nightfall" },
+    { "at": 1260, "src": "frames/005.webp", "dim": 0.02, "label": "深夜", "labelEn": "Deep night" }
+  ]
+}

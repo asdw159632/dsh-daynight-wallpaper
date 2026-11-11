@@ -1,0 +1,34 @@
+{
+  "name": "@local/dsh-daynight-wallpaper",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "昼夜壁纸：把日转夜延时映射到真实时钟，破晓、白昼、黄昏、星夜随着时间推进；内置雪峰 / 东京两套图，可加蒙皮，皮肤不兼容时可一键让位。",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "assets/scenes.json",
+    "assets/*/schedule.json",
+    "assets/*/frames"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

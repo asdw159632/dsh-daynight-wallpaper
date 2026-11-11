@@ -1,0 +1,8 @@
+{
+  "schema": "daynight-peak/scenes/1",
+  "note": "场景清单；浏览器半区先读它，再按设置里的 scene 取该场景的时刻表。",
+  "scenes": [
+    { "id": "mountain", "name": "雪峰", "nameEn": "Mountain", "schedule": "mountain/schedule.json" },
+    { "id": "tokyo", "name": "东京", "nameEn": "Tokyo", "schedule": "tokyo/schedule.json" }
+  ]
+}

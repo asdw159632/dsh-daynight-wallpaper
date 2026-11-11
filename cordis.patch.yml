@@ -1,0 +1,8 @@
+# 昼夜壁纸的挂载声明。
+#
+# 只有一行：宿主半区（index.js）负责端出素材与设置路由，浏览器半区（client.js）
+# 负责按当前时钟画背景。两者都由 package.json 的 exports / dsh.client 声明，
+# 这里不需要任何 config。
+- insert:
+    - id: dsh-daynight-wallpaper
+      name: '@local/dsh-daynight-wallpaper'
