@@ -60,6 +60,8 @@ const DEFAULTS = {
   tint: 'none',
   /** 蒙皮浓度 0–80（%）。整层纱已经有亮度自适应，这里只给用户额外压暗/调色的余地 */
   tintOpacity: 0,
+  /** 面板透度 0–100：0 = 面板保持不透明，100 = 最透（壁纸透过卡片/侧栏/弹窗） */
+  glass: 85,
   /** 让皮肤让位：给 body 打 data-we-wallpaper，皮肤中心会整体停画 */
   yieldSkin: false,
 }
@@ -106,6 +108,9 @@ function sanitize(input, sceneIds) {
     scene: scenes.includes(merged.scene) ? merged.scene : scenes[0],
     tint: TINT_IDS.includes(merged.tint) ? merged.tint : DEFAULTS.tint,
     tintOpacity: Number.isFinite(opacity) ? Math.min(80, Math.max(0, Math.round(opacity))) : DEFAULTS.tintOpacity,
+    glass: Number.isFinite(Number(merged.glass))
+      ? Math.min(100, Math.max(0, Math.round(Number(merged.glass))))
+      : DEFAULTS.glass,
     yieldSkin: merged.yieldSkin === true,
   }
 }

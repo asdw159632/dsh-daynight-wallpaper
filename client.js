@@ -43,7 +43,36 @@ window.__ModuleLoader__.load({
     const YIELD_ATTR = 'data-we-wallpaper'
 
     /** 缺省设置：与宿主半区的 DEFAULTS 一致，宿主那份是权威。 */
-    const DEFAULT_SETTINGS = { enabled: true, scene: 'mountain', tint: 'none', tintOpacity: 0, yieldSkin: false }
+    const DEFAULT_SETTINGS = {
+      enabled: true,
+      scene: 'mountain',
+      tint: 'none',
+      tintOpacity: 0,
+      yieldSkin: false,
+      glass: 85,
+    }
+
+    /**
+     * 「玻璃」表：这些面板底色在官方主题里都是不透明的，壁纸会被整片盖住。
+     * 下面这些 alpha 是「面板透度 = 100」时的目标值，实际值按设置插值：
+     * alpha = 1 - (1 - 目标) * glass/100，所以 0 = 完全不动面板、100 = 最透。
+     * 数值取舍：
+     *   - base 是整块画布（外壳 frame / 会话根），压到 0.35 才看得见壁纸；
+     *   - layer-1/2/3 是卡片、按钮、弹层内里的底，压到 0.55–0.70 保留可读性；
+     *   - overlay 是菜单/弹窗，0.88 基本不牺牲可读性；
+     *   - sidebar 单独一个 token，0.45 让侧栏也透一点；
+     *   - 文档预览、代码块这类需要实心底的不在表里，保持原样。
+     */
+    const GLASS = [
+      { token: '--dsw-alias-bg-base', alpha: 0.35 },
+      { token: '--dsw-alias-bg-layer-1', alpha: 0.7 },
+      { token: '--dsw-alias-bg-layer-2', alpha: 0.72 },
+      { token: '--dsw-alias-bg-layer-3', alpha: 0.76 },
+      { token: '--dsw-alias-bg-module-platform', alpha: 0.6 },
+      { token: '--dsw-alias-bg-multi-select', alpha: 0.78 },
+      { token: '--dsw-alias-bg-overlay', alpha: 0.92 },
+      { token: '--dsw-specific-sidebar-fill', alpha: 0.45 },
+    ]
 
     /** 蒙皮预设：id → 色值。null 表示「不罩」。 */
     const TINTS = {
@@ -188,6 +217,10 @@ window.__ModuleLoader__.load({
       tintOpacity: '蒙皮浓度',
       yieldLabel: '让皮肤让位',
       yieldHint: '有些皮肤把画作画在面板上（例如 ORCA LINK），会整片盖住壁纸。打开这个开关会临时收起皮肤的全部外观，只留壁纸 + 官方外观；关掉立刻恢复。',
+      footOn: '昼夜壁纸：{phase} · 点击停用',
+      footOff: '昼夜壁纸：已停用 · 点击启用',
+      glassLabel: '面板透度',
+      glassHint: '0 = 卡片、侧栏、弹窗保持不透明；100 = 它们尽量透，壁纸从按钮和对话框后面露出来。',
       yieldBadgeOn: '皮肤停画中',
       yieldBadgeOff: '皮肤正常显示',
       previewHint: '想先看别的时段：在地址栏加 ?time=18:10',
@@ -219,6 +252,10 @@ window.__ModuleLoader__.load({
       tintOpacity: 'Gel strength',
       yieldLabel: 'Make the skin step aside',
       yieldHint: 'Some skins paint over the panes themselves (ORCA LINK, for instance) and cover the wallpaper entirely. Turning this on suspends the whole skin look and leaves the wallpaper with the official surfaces; turning it off restores the skin instantly.',
+      footOn: 'Day & Night Wallpaper: {phase} · click to turn off',
+      footOff: 'Day & Night Wallpaper: off · click to turn on',
+      glassLabel: 'Panel glass',
+      glassHint: '0 keeps cards, the sidebar and dialogs opaque; 100 lets the wallpaper show through them.',
       yieldBadgeOn: 'skin suspended',
       yieldBadgeOff: 'skin active',
       previewHint: 'To preview another hour: add ?time=18:10 to the address bar',
@@ -322,8 +359,8 @@ window.__ModuleLoader__.load({
       let disposed = false
       let ownYield = false
       const preloads = new Map()
-      /** 底色兜底层：官方外观的 --dsw-alias-bg-base 是不透明的，壁纸会被它整片盖住。 */
-      let baseStyle = null
+      /** 面板玻璃层：把外壳那些不透明的面板底色压成半透明，壁纸才透得出来。 */
+      let glassStyle = null
       /** 预览锁定（`?dnp=HH:MM`），null 表示跟随真实时钟。 */
       const pinned = previewMinutes(doc.location && doc.location.search)
 
@@ -361,6 +398,9 @@ window.__ModuleLoader__.load({
                   ? Math.min(80, Math.max(0, Math.round(Number(settings.tintOpacity))))
                   : 0,
                 yieldSkin: settings.yieldSkin === true,
+                glass: Number.isFinite(Number(settings.glass))
+                  ? Math.min(100, Math.max(0, Math.round(Number(settings.glass))))
+                  : DEFAULT_SETTINGS.glass,
               },
               saveError: false,
             })
@@ -416,44 +456,57 @@ window.__ModuleLoader__.load({
        * 皮肤为什么都把同一个 token 改成半透明的原因。这里做同样的事，但只在需要时：
        * 读出当前底色，把 alpha 压到 ≤0.35 再写回去。已经比 0.35 更透的皮肤不受影响。
        */
-      function refreshBase() {
-        if (baseStyle) {
-          baseStyle.remove()
-          baseStyle = null
+      function refreshGlass() {
+        if (glassStyle) {
+          glassStyle.remove()
+          glassStyle = null
         }
         const body = doc.body
         if (!body) return
         // 先摘掉自己的覆盖再读，否则读到的是上一次的写入值。
-        // 取「真正在画底板」的那个元素的计算后背景色：外壳的 frame 优先，
-        // 其次 body / html。读不到就什么都不做。
-        const candidates = [doc.querySelector('[data-dsh-frame]'), body, doc.documentElement]
-        let base = null
-        for (const element of candidates) {
-          if (!element) continue
-          const matched = /^rgba?\(([^)]+)\)$/.exec(getComputedStyle(element).backgroundColor || '')
-          if (!matched) continue
+        // 每个 token 都用一个隐藏探针把它的「计算后颜色」量出来（皮肤/主题怎么写的都行），
+        // 再压成半透明写回去。读不到的token跳过。
+        const probe = doc.createElement('div')
+        probe.setAttribute('aria-hidden', 'true')
+        probe.style.cssText = 'position:absolute;width:0;height:0;visibility:hidden;'
+        body.appendChild(probe)
+        const read = (token) => {
+          probe.style.backgroundColor = `var(${token})`
+          const matched = /^rgba?\(([^)]+)\)$/.exec(getComputedStyle(probe).backgroundColor || '')
+          if (!matched) return null
           const parts = matched[1].split(',').map((value) => Number(value.trim()))
-          if (parts.length < 3 || parts.slice(0, 3).some((value) => !Number.isFinite(value))) continue
+          if (parts.length < 3 || parts.slice(0, 3).some((value) => !Number.isFinite(value))) return null
           const alpha = parts.length > 3 && Number.isFinite(parts[3]) ? parts[3] : 1
-          if (alpha <= 0) continue
-          base = { r: parts[0], g: parts[1], b: parts[2], a: alpha }
-          break
+          return alpha > 0 ? { r: parts[0], g: parts[1], b: parts[2], a: alpha } : null
         }
-        // 底板本来就够透（皮肤自己处理过）就不插手，保持皮肤原样
-        if (!base || base.a <= 0.35) return
-        const tint = `rgba(${base.r},${base.g},${base.b},0.35)`
-        baseStyle = doc.createElement('style')
-        baseStyle.setAttribute('data-dsh-daynight-wallpaper-base', '')
-        baseStyle.textContent = `:root,body{--dsw-alias-bg-base:${tint} !important}`
-        doc.head.appendChild(baseStyle)
+        const declarations = []
+        // 面板透度：0 = 一键回到完全不透明，100 = 用表里的目标 alpha
+        const strength = Math.min(100, Math.max(0, Number(snap.settings.glass) || 0)) / 100
+        for (const surface of GLASS) {
+          const color = read(surface.token)
+          const target = 1 - (1 - surface.alpha) * strength
+          // 本来就比目标更透（皮肤自己处理过）就不插手
+          if (!color || color.a <= target) continue
+          // 注意：!important 是逐条声明生效的，必须写在每一条上（曾经只写在最后一条，
+          // 结果前面几条被主题的值压住，看起来像"改了没生效"）
+          declarations.push(
+            `${surface.token}:rgba(${color.r},${color.g},${color.b},${target.toFixed(3)}) !important`,
+          )
+        }
+        probe.remove()
+        if (declarations.length === 0) return
+        glassStyle = doc.createElement('style')
+        glassStyle.setAttribute('data-dsh-daynight-wallpaper-glass', '')
+        glassStyle.textContent = `:root,body{${declarations.join(';')}}`
+        doc.head.appendChild(glassStyle)
       }
 
-      /** 图层真正可见时才有必要动底色。 */
-      function syncBase(visible) {
-        if (visible) refreshBase()
-        else if (baseStyle) {
-          baseStyle.remove()
-          baseStyle = null
+      /** 图层真正可见时才有必要动这些面板底色。 */
+      function syncGlass(visible) {
+        if (visible) refreshGlass()
+        else if (glassStyle) {
+          glassStyle.remove()
+          glassStyle = null
         }
       }
 
@@ -475,7 +528,7 @@ window.__ModuleLoader__.load({
           tintEl.style.backgroundColor = color || 'transparent'
           tintEl.style.opacity = color ? String(Math.min(80, Math.max(0, tintOpacity)) / 100) : '0'
         }
-        syncBase(enabled)
+        syncGlass(enabled)
         if (enabled) render()
       }
 
@@ -555,10 +608,10 @@ window.__ModuleLoader__.load({
         const yielded = body.hasAttribute(YIELD_ATTR) && !ownYield
         if (yielded || !snap.settings.enabled) {
           layer.style.display = 'none'
-          syncBase(false)
+          syncGlass(false)
           return
         }
-        if (!baseStyle) refreshBase()
+        if (!glassStyle) refreshGlass()
         layer.style.display = ''
         if (!points) return
 
@@ -695,7 +748,7 @@ window.__ModuleLoader__.load({
         })
         // 皮肤切换会换掉 --dsw-alias-bg-base，重算底色兜底
         if (doc.documentElement) {
-          skinObserver = new MutationObserver(() => refreshBase())
+          skinObserver = new MutationObserver(() => refreshGlass())
           skinObserver.observe(doc.documentElement, {
             attributes: true,
             attributeFilter: ['data-dsh-skin'],
@@ -726,7 +779,7 @@ window.__ModuleLoader__.load({
           if (refreshTimer) clearInterval(refreshTimer)
           if (observer) observer.disconnect()
           if (skinObserver) skinObserver.disconnect()
-          if (baseStyle) baseStyle.remove()
+          if (glassStyle) glassStyle.remove()
           doc.removeEventListener('DOMContentLoaded', boot)
           doc.removeEventListener('visibilitychange', onResume)
           if (layer && layer.parentNode) layer.parentNode.removeChild(layer)
@@ -886,6 +939,30 @@ window.__ModuleLoader__.load({
                 onChange: (value) => saveSettings({ yieldSkin: value }),
               }),
             ),
+            React.createElement(
+              'div',
+              { className: 'dnw-row' },
+              React.createElement(
+                'div',
+                { className: 'dnw-rowText' },
+                React.createElement('span', { className: 'dnw-label' }, t('glassLabel')),
+                React.createElement('span', { className: 'dnw-hint' }, t('glassHint')),
+              ),
+              React.createElement(
+                'div',
+                { className: 'dnw-sliderRow', style: { flex: '0 0 240px' } },
+                React.createElement('input', {
+                  className: 'dnw-range',
+                  type: 'range',
+                  min: 0,
+                  max: 100,
+                  step: 5,
+                  value: settings.glass,
+                  onChange: (event) => saveSettings({ glass: Number(event.target.value) }),
+                }),
+                React.createElement('span', { className: 'dnw-value' }, `${settings.glass}%`),
+              ),
+            ),
             page.saveError ? React.createElement('span', { className: 'dnw-err' }, t('saveFailed')) : null,
           ),
           React.createElement(
@@ -934,6 +1011,90 @@ window.__ModuleLoader__.load({
             ),
           ),
         )
+      }
+
+      /** 侧栏页脚的小按钮：一眼看状态，一键开关壁纸。 */
+      function WallpaperButton(props) {
+        const locale = props.locale
+        if (locale && typeof locale.subscribe === 'function') {
+          React.useSyncExternalStore(
+            (cb) => locale.subscribe(cb),
+            () => locale.getSnapshot(),
+          )
+        }
+        const page = React.useSyncExternalStore(subscribe, getSnapshot)
+        const activeLocale = locale && typeof locale.getLocale === 'function' ? locale.getLocale().active : 'en'
+        const phase = page.status
+          ? activeLocale === 'en'
+            ? page.status.labelEn || page.status.label
+            : page.status.label || page.status.labelEn
+          : ''
+        const on = page.settings.enabled
+        const label = (on ? t('footOn') : t('footOff')).replace('{phase}', phase || '—')
+        return React.createElement(
+          'button',
+          {
+            type: 'button',
+            'data-wide': props.wide ? 'wide' : 'rail',
+            'data-dsh-part': 'daynight-wallpaper-toggle',
+            'aria-pressed': on,
+            'aria-label': label,
+            title: label,
+            onClick: () => saveSettings({ enabled: !on }),
+            style: {
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              width: props.wide ? '100%' : 32,
+              height: 32,
+              padding: props.wide ? '0 10px' : 0,
+              borderRadius: 8,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+              cursor: 'pointer',
+              opacity: on ? 1 : 0.45,
+              fontSize: 12,
+            },
+          },
+          React.createElement(
+            'svg',
+            {
+              width: 16,
+              height: 16,
+              viewBox: '0 0 16 16',
+              fill: 'none',
+              stroke: 'currentColor',
+              strokeWidth: 1.3,
+              strokeLinecap: 'round',
+              strokeLinejoin: 'round',
+              'aria-hidden': 'true',
+            },
+            React.createElement('circle', { cx: 11.4, cy: 4.6, r: 2.2 }),
+            React.createElement('path', { d: 'M1.5 12.8 L5.6 7.4 L8.4 11 L10.2 8.9 L14.5 12.8 Z' }),
+            React.createElement('path', { d: 'M1.5 12.8 H14.5' }),
+            on ? null : React.createElement('path', { d: 'M2.4 2.4 L13.6 13.6' }),
+          ),
+          props.wide ? React.createElement('span', null, phase || '') : null,
+        )
+      }
+
+      try {
+        ctx.slots.inject('sidebar.footer.action', () =>
+          ctx.slots.register(
+            {
+              name: 'sidebar.footer.action',
+              id: 'daynight-wallpaper-toggle',
+              order: 40,
+              locale: NS,
+              inject: () => ({ t, locale: ctx.locale }),
+            },
+            WallpaperButton,
+          ),
+        )
+      } catch (error) {
+        /* 老宿主没有这个槽位就静默跳过，设置页仍然可用 */
       }
 
       ctx.slots.inject('settings.section', () =>
