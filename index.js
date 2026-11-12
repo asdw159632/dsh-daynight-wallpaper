@@ -60,8 +60,10 @@ const DEFAULTS = {
   tint: 'none',
   /** 蒙皮浓度 0–80（%）。整层纱已经有亮度自适应，这里只给用户额外压暗/调色的余地 */
   tintOpacity: 0,
-  /** 面板透度 0–100：0 = 面板保持不透明，100 = 最透（壁纸透过卡片/侧栏/弹窗） */
-  glass: 85,
+  /** 画布透度 0–100：外壳底板（壁纸可见度的主开关）单独一档 */
+  canvasGlass: 85,
+  /** 面板透度 0–100：卡片 / 侧栏 / 菜单 / 弹窗 / 代码块 / 文档预览 */
+  panelGlass: 85,
   /** 让皮肤让位：给 body 打 data-we-wallpaper，皮肤中心会整体停画 */
   yieldSkin: false,
 }
@@ -97,6 +99,26 @@ async function knownScenes() {
   return cachedSceneIds
 }
 
+/**
+ * 两个透度字段：画布与面板各自独立。
+ * 旧版本只有一个 `glass`，遇到它就当成两者的值（升级后观感不变）。
+ */
+function glassFields(input) {
+  const clamp = (value, fallback) =>
+    Number.isFinite(Number(value)) ? Math.min(100, Math.max(0, Math.round(Number(value)))) : fallback
+  return {
+    canvasGlass: clamp(input && input.canvasGlass, DEFAULTS.canvasGlass),
+    panelGlass: clamp(input && input.panelGlass, DEFAULTS.panelGlass),
+  }
+}
+
+/** 旧字段 `glass` → 两个新字段（只在调用方确认这是"旧写法"时用）。 */
+function legacyGlass(input) {
+  const value = Number(input && input.glass)
+  if (!Number.isFinite(value)) return null
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
 /** 把任意输入收敛成合法设置对象（未知字段丢弃，数值夹紧）。 */
 function sanitize(input, sceneIds) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
@@ -108,9 +130,7 @@ function sanitize(input, sceneIds) {
     scene: scenes.includes(merged.scene) ? merged.scene : scenes[0],
     tint: TINT_IDS.includes(merged.tint) ? merged.tint : DEFAULTS.tint,
     tintOpacity: Number.isFinite(opacity) ? Math.min(80, Math.max(0, Math.round(opacity))) : DEFAULTS.tintOpacity,
-    glass: Number.isFinite(Number(merged.glass))
-      ? Math.min(100, Math.max(0, Math.round(Number(merged.glass))))
-      : DEFAULTS.glass,
+    ...glassFields(merged),
     yieldSkin: merged.yieldSkin === true,
   }
 }
@@ -118,8 +138,16 @@ function sanitize(input, sceneIds) {
 async function readSettings() {
   const sceneIds = await knownScenes()
   try {
-    const raw = await readFile(SETTINGS_PATH, 'utf8')
-    return sanitize(JSON.parse(raw), sceneIds)
+    const source = JSON.parse(await readFile(SETTINGS_PATH, 'utf8'))
+    // 老文件只有一个 glass：读的时候当成画布 + 面板两个值
+    if (source && source.canvasGlass === undefined && source.panelGlass === undefined) {
+      const legacy = legacyGlass(source)
+      if (legacy !== null) {
+        source.canvasGlass = legacy
+        source.panelGlass = legacy
+      }
+    }
+    return sanitize(source, sceneIds)
   } catch {
     return sanitize({}, sceneIds)
   }
@@ -128,10 +156,17 @@ async function readSettings() {
 /** 合并保存：只覆盖这次带来的字段，其余沿用磁盘上已有的值。 */
 async function writeSettings(value) {
   const sceneIds = await knownScenes()
-  const settings = sanitize(
-    { ...(await readSettings()), ...(value && typeof value === 'object' ? value : {}) },
-    sceneIds,
-  )
+  const patch = value && typeof value === 'object' ? value : {}
+  const source = { ...(await readSettings()), ...patch }
+  // 本次提交只带旧的 `glass`（新客户端不会这样）→ 两个新字段一起跟着它走
+  if (patch.glass !== undefined && patch.canvasGlass === undefined && patch.panelGlass === undefined) {
+    const legacy = legacyGlass(patch)
+    if (legacy !== null) {
+      source.canvasGlass = legacy
+      source.panelGlass = legacy
+    }
+  }
+  const settings = sanitize(source, sceneIds)
   await mkdir(join(SETTINGS_PATH, '..'), { recursive: true })
   const temp = `${SETTINGS_PATH}.tmp`
   await writeFile(temp, `${JSON.stringify(settings, null, 2)}\n`, 'utf8')

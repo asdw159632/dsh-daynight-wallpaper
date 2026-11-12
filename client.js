@@ -49,7 +49,8 @@ window.__ModuleLoader__.load({
       tint: 'none',
       tintOpacity: 0,
       yieldSkin: false,
-      glass: 85,
+      canvasGlass: 85,
+      panelGlass: 85,
     }
 
     /**
@@ -63,15 +64,43 @@ window.__ModuleLoader__.load({
      *   - sidebar 单独一个 token，0.45 让侧栏也透一点；
      *   - 文档预览、代码块这类需要实心底的不在表里，保持原样。
      */
-    const GLASS = [
-      { token: '--dsw-alias-bg-base', alpha: 0.35 },
+    /**
+     * 画布（外壳底板）单独一组：它是"壁纸能不能看见"的总闸。
+     * alpha 是「透度 = 100」时的目标值，实际按设置插值：
+     * alpha = 1 - (1 - 目标) * 透度/100。
+     */
+    const GLASS_CANVAS = [{ token: '--dsw-alias-bg-base', alpha: 0.35 }]
+
+    /**
+     * 面板一组：卡片、侧栏、菜单、弹窗，外加文档预览与代码块、次级按钮。
+     * 目标 alpha 各自不同——代码块要留住语法色的底色，所以比卡片更实一点；
+     * 主按钮（--dsw-alias-button-primary-fill）是白底强调色，不放进来。
+     */
+    const GLASS_PANELS = [
       { token: '--dsw-alias-bg-layer-1', alpha: 0.7 },
       { token: '--dsw-alias-bg-layer-2', alpha: 0.72 },
       { token: '--dsw-alias-bg-layer-3', alpha: 0.76 },
       { token: '--dsw-alias-bg-module-platform', alpha: 0.6 },
       { token: '--dsw-alias-bg-multi-select', alpha: 0.78 },
       { token: '--dsw-alias-bg-overlay', alpha: 0.92 },
+      { token: '--dsw-alias-bg-document-preview', alpha: 0.8 },
       { token: '--dsw-specific-sidebar-fill', alpha: 0.45 },
+      // 代码块 / 内联代码 / 引用与占位：预览里最容易显得"实心"的一块
+      { token: '--dsw-alias-markdown-code-block', alpha: 0.86 },
+      { token: '--dsw-alias-markdown-code-block-banner', alpha: 0.86 },
+      { token: '--dsw-alias-markdown-code-segment-selected', alpha: 0.8 },
+      { token: '--dsw-alias-markdown-code-segment-unselected', alpha: 0.86 },
+      { token: '--dsw-alias-markdown-inline-code', alpha: 0.8 },
+      { token: '--dsw-alias-markdown-citation', alpha: 0.8 },
+      { token: '--dsw-alias-markdown-placeholder', alpha: 0.8 },
+      { token: '--dsw-alias-markdown-tag', alpha: 0.8 },
+      // 次级按钮 / 悬浮按钮（主按钮不动，那是强调色）
+      { token: '--dsw-alias-button-floating-fill', alpha: 0.6 },
+      { token: '--dsw-alias-button-floating-hover', alpha: 0.66 },
+      { token: '--dsw-alias-button-elevated-fill', alpha: 0.6 },
+      { token: '--dsw-alias-button-ghost-active-fill', alpha: 0.6 },
+      { token: '--dsw-alias-interactive-bg-hover-solid', alpha: 0.6 },
+      { token: '--dsw-alias-onboarding-secondary-fill', alpha: 0.6 },
     ]
 
     /** 蒙皮预设：id → 色值。null 表示「不罩」。 */
@@ -219,8 +248,10 @@ window.__ModuleLoader__.load({
       yieldHint: '有些皮肤把画作画在面板上（例如 ORCA LINK），会整片盖住壁纸。打开这个开关会临时收起皮肤的全部外观，只留壁纸 + 官方外观；关掉立刻恢复。',
       footOn: '昼夜壁纸：{phase} · 点击停用',
       footOff: '昼夜壁纸：已停用 · 点击启用',
-      glassLabel: '面板透度',
-      glassHint: '0 = 卡片、侧栏、弹窗保持不透明；100 = 它们尽量透，壁纸从按钮和对话框后面露出来。',
+      canvasGlassLabel: '画布透度',
+      canvasGlassHint: '只影响最底下那层画布：它决定壁纸本身能透出多少。',
+      panelGlassLabel: '面板透度',
+      panelGlassHint: '卡片、侧栏、菜单、弹窗、代码块与文档预览；0 = 它们保持不透明。',
       yieldBadgeOn: '皮肤停画中',
       yieldBadgeOff: '皮肤正常显示',
       previewHint: '想先看别的时段：在地址栏加 ?time=18:10',
@@ -254,8 +285,10 @@ window.__ModuleLoader__.load({
       yieldHint: 'Some skins paint over the panes themselves (ORCA LINK, for instance) and cover the wallpaper entirely. Turning this on suspends the whole skin look and leaves the wallpaper with the official surfaces; turning it off restores the skin instantly.',
       footOn: 'Day & Night Wallpaper: {phase} · click to turn off',
       footOff: 'Day & Night Wallpaper: off · click to turn on',
-      glassLabel: 'Panel glass',
-      glassHint: '0 keeps cards, the sidebar and dialogs opaque; 100 lets the wallpaper show through them.',
+      canvasGlassLabel: 'Canvas glass',
+      canvasGlassHint: 'Only the bottom canvas layer: how much of the wallpaper itself shows through.',
+      panelGlassLabel: 'Panel glass',
+      panelGlassHint: 'Cards, the sidebar, menus, dialogs, code blocks and the document preview; 0 keeps them opaque.',
       yieldBadgeOn: 'skin suspended',
       yieldBadgeOff: 'skin active',
       previewHint: 'To preview another hour: add ?time=18:10 to the address bar',
@@ -377,6 +410,14 @@ window.__ModuleLoader__.load({
       // 设置：读写 + 落到图层上
       // ------------------------------------------------------------------
 
+      /** 0–100 的透度字段；旧版本只有一个 `glass`，那时它同时管画布和面板。 */
+      function readGlass(value, legacy, fallback) {
+        const source = value !== undefined && value !== null ? value : legacy
+        return Number.isFinite(Number(source))
+          ? Math.min(100, Math.max(0, Math.round(Number(source))))
+          : fallback
+      }
+
       function loadSettings() {
         if (disposed) return
         fetch(urlOf('settings'), { cache: 'no-cache', credentials: 'same-origin' })
@@ -398,9 +439,8 @@ window.__ModuleLoader__.load({
                   ? Math.min(80, Math.max(0, Math.round(Number(settings.tintOpacity))))
                   : 0,
                 yieldSkin: settings.yieldSkin === true,
-                glass: Number.isFinite(Number(settings.glass))
-                  ? Math.min(100, Math.max(0, Math.round(Number(settings.glass))))
-                  : DEFAULT_SETTINGS.glass,
+                canvasGlass: readGlass(settings.canvasGlass, settings.glass, DEFAULT_SETTINGS.canvasGlass),
+                panelGlass: readGlass(settings.panelGlass, settings.glass, DEFAULT_SETTINGS.panelGlass),
               },
               saveError: false,
             })
@@ -480,18 +520,23 @@ window.__ModuleLoader__.load({
           return alpha > 0 ? { r: parts[0], g: parts[1], b: parts[2], a: alpha } : null
         }
         const declarations = []
-        // 面板透度：0 = 一键回到完全不透明，100 = 用表里的目标 alpha
-        const strength = Math.min(100, Math.max(0, Number(snap.settings.glass) || 0)) / 100
-        for (const surface of GLASS) {
-          const color = read(surface.token)
-          const target = 1 - (1 - surface.alpha) * strength
-          // 本来就比目标更透（皮肤自己处理过）就不插手
-          if (!color || color.a <= target) continue
-          // 注意：!important 是逐条声明生效的，必须写在每一条上（曾经只写在最后一条，
-          // 结果前面几条被主题的值压住，看起来像"改了没生效"）
-          declarations.push(
-            `${surface.token}:rgba(${color.r},${color.g},${color.b},${target.toFixed(3)}) !important`,
-          )
+        const strengthOf = (value) => Math.min(100, Math.max(0, Number(value) || 0)) / 100
+        const groups = [
+          { surfaces: GLASS_CANVAS, strength: strengthOf(snap.settings.canvasGlass) },
+          { surfaces: GLASS_PANELS, strength: strengthOf(snap.settings.panelGlass) },
+        ]
+        for (const group of groups) {
+          for (const surface of group.surfaces) {
+            const color = read(surface.token)
+            const target = 1 - (1 - surface.alpha) * group.strength
+            // 本来就比目标更透（皮肤自己处理过）就不插手
+            if (!color || color.a <= target) continue
+            // 注意：!important 逐条声明生效，必须写在每一条上（只写在最后一条时
+            // 前面几条会被主题的值压住，看起来像"改了没生效"）
+            declarations.push(
+              `${surface.token}:rgba(${color.r},${color.g},${color.b},${target.toFixed(3)}) !important`,
+            )
+          }
         }
         probe.remove()
         if (declarations.length === 0) return
@@ -939,28 +984,34 @@ window.__ModuleLoader__.load({
                 onChange: (value) => saveSettings({ yieldSkin: value }),
               }),
             ),
-            React.createElement(
-              'div',
-              { className: 'dnw-row' },
+            ...[
+              { key: 'canvasGlass', label: 'canvasGlassLabel', hint: 'canvasGlassHint' },
+              { key: 'panelGlass', label: 'panelGlassLabel', hint: 'panelGlassHint' },
+            ].map((item) =>
               React.createElement(
                 'div',
-                { className: 'dnw-rowText' },
-                React.createElement('span', { className: 'dnw-label' }, t('glassLabel')),
-                React.createElement('span', { className: 'dnw-hint' }, t('glassHint')),
-              ),
-              React.createElement(
-                'div',
-                { className: 'dnw-sliderRow', style: { flex: '0 0 240px' } },
-                React.createElement('input', {
-                  className: 'dnw-range',
-                  type: 'range',
-                  min: 0,
-                  max: 100,
-                  step: 5,
-                  value: settings.glass,
-                  onChange: (event) => saveSettings({ glass: Number(event.target.value) }),
-                }),
-                React.createElement('span', { className: 'dnw-value' }, `${settings.glass}%`),
+                { className: 'dnw-row', key: item.key },
+                React.createElement(
+                  'div',
+                  { className: 'dnw-rowText' },
+                  React.createElement('span', { className: 'dnw-label' }, t(item.label)),
+                  React.createElement('span', { className: 'dnw-hint' }, t(item.hint)),
+                ),
+                React.createElement(
+                  'div',
+                  { className: 'dnw-sliderRow', style: { flex: '0 0 240px' } },
+                  React.createElement('input', {
+                    className: 'dnw-range',
+                    type: 'range',
+                    min: 0,
+                    max: 100,
+                    step: 5,
+                    value: settings[item.key],
+                    'aria-label': t(item.label),
+                    onChange: (event) => saveSettings({ [item.key]: Number(event.target.value) }),
+                  }),
+                  React.createElement('span', { className: 'dnw-value' }, `${settings[item.key]}%`),
+                ),
               ),
             ),
             page.saveError ? React.createElement('span', { className: 'dnw-err' }, t('saveFailed')) : null,
